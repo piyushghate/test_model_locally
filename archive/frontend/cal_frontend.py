@@ -6,9 +6,8 @@ import os
 # Add parent directory to path to import backend
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from backend.cal_backend import Calculator
+from archive.backend.cal_backend import Calculator
 import tkinter as tk
-from tkinter import messagebox
 
 
 class CalculatorApp:

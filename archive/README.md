@@ -31,13 +31,14 @@ The `Calculator` class provides static methods for basic arithmetic operations:
 Also includes an interactive CLI demo via `main()`.
 
 ### Usage
+
 ```python
-from backend.cal_backend import Calculator
+from archive.backend.cal_backend import Calculator
 
 calc = Calculator()
-calc.add(5, 3)        # 8
-calc.divide(10, 2)    # 5.0
-calc.power(2, 3)      # 8
+calc.add(5, 3)  # 8
+calc.divide(10, 2)  # 5.0
+calc.power(2, 3)  # 8
 ```
 
 ## Frontend (`frontend/cal_frontend.py`)
