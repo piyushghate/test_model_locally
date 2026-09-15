@@ -159,47 +159,72 @@ TOOLS = [
 
 def run(user_message: str, max_turns: int = 5) -> str:
     messages = [{"role": "user", "content": user_message}]
+    turns = 0
 
-    for _ in range(max_turns):
+    while turns < max_turns:
+        turns += 1
         response = client.messages.create(
             model=MODEL,
             max_tokens=1024,
             tools=TOOLS,
             messages=messages,
         )
-
-        # Append Claude's turn (may contain text + tool_use blocks) as-is.
+        print(f"response - {response}")
         messages.append({"role": "assistant", "content": response.content})
 
-        if response.stop_reason != "tool_use":
-            # Final answer — collect any text blocks.
-            return "".join(
-                block.text for block in response.content if block.type == "text"
-            )
+        stop_reason = response.stop_reason
 
-        # Handle every tool_use block in this turn, build tool_result content.
-        tool_results = []
-        for block in response.content:
-            if block.type != "tool_use":
-                continue
-            impl = TOOL_IMPLEMENTATIONS.get(block.name)
-            if impl is None:
-                output = {"error": f"Unknown tool: {block.name}"}
-            else:
-                output = impl(block.input)
+        if stop_reason == "tool_use":
+            # Extract every tool_use block Claude asked for in this turn
+            tool_use_blocks = [b for b in response.content if b.type == "tool_use"]
 
-            tool_results.append(
-                {
+            tool_results = []
+            for block in tool_use_blocks:
+                tool_name = block.name
+                tool_input = block.input
+                tool_use_id = block.id
+
+                impl = TOOL_IMPLEMENTATIONS.get(tool_name)
+                is_error = False
+
+                if impl is None:
+                    output = {"error": f"Unknown tool: {tool_name}"}
+                    is_error = True
+                else:
+                    try:
+                        output = impl(tool_input)
+                    except Exception as e:
+                        # Malformed input, missing key, runtime failure, etc.
+                        output = {"error": f"{type(e).__name__}: {e}"}
+                        is_error = True
+
+                tool_results.append({
                     "type": "tool_result",
-                    "tool_use_id": block.id,
+                    "tool_use_id": tool_use_id,
                     "content": json.dumps(output),
-                }
-            )
+                    "is_error": is_error,
+                })
 
-        messages.append({"role": "user", "content": tool_results})
+            # Hand results back to Claude as a user turn, so it can continue
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        elif stop_reason == "end_turn":
+            return "".join(b.text for b in response.content if b.type == "text")
+
+        elif stop_reason == "max_tokens":
+            partial = "".join(b.text for b in response.content if b.type == "text")
+            return partial + "\n[response truncated: hit max_tokens]"
+
+        elif stop_reason == "stop_sequence":
+            return "".join(b.text for b in response.content if b.type == "text")
+
+        else:
+            # pause_turn, refusal, or any other/unexpected value
+            return f"Stopped unexpectedly (stop_reason={stop_reason})"
 
     return "Max turns reached without a final answer."
 
 
 if __name__ == "__main__":
-    print(run("What is (5 + 5) * 3? Also, search for 'best pizza in Balewadi, Pune'."))
+    print(run("What is (5 + 5) * 3? Also, search for 'best pizza in Kharadi, Pune'."))
